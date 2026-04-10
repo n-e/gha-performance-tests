@@ -1,0 +1,38 @@
+on:
+  push:
+
+jobs:
+  pg-node-container-job:
+    runs-on: ubuntu-latest
+    container: node:24-trixie-slim
+
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-start-interval 1s
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v6
+      - run: npm ci --omit=dev
+      - run: PGHOST=postgres PGUSER=postgres PGPASSWORD=postgres node pgclient.ts
+
+  no-container-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: docker run -d --rm --name pgpg --env POSTGRES_PASSWORD=postgres --publish 5432:5432 postgres
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --omit=dev
+      - run: until docker exec pgpg pg_isready; do sleep 1; done
+      - run: PGHOST=127.0.0.1 PGUSER=postgres PGPASSWORD=postgres node pgclient.ts
